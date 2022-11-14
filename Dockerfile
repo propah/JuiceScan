@@ -34,5 +34,5 @@ USER appuser
 COPY . .
 
 # Run the executable
-ENTRYPOINT ["python", "-m", "juicescan"]
+ENTRYPOINT ["python3", "-m", "juicescan"]
 CMD ["10"]

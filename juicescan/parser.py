@@ -13,23 +13,33 @@ def is_valid_ip_address(ip_string) -> bool:
         return False
 
 
+class ScanType(Enum):
+    OPEN = 1
+    SYN = 2
+
+
 class PortType(Enum):
     LIST = 1
-    MIN_MAX = 2
+    RANGE = 2
 
 
 class CommandInfo:
-    def __init__(self, ipv4: str, threads: int) -> None:
-        self.ipv4 = ipv4
-        self.threads = threads
+    def __init__(
+        self, ipv4: str, threads: int, ports: list[int], port_type: PortType
+    ) -> None:
+        self.ipv4: str = ipv4
+        self.threads: int = threads
+        self.port_type: PortType = port_type
+        self.ports: list[int] = ports
+        self.scan_type: ScanType = ScanType.OPEN
 
-    def fromPortList(self, ports: list[int]) -> None:
-        self.port_type = PortType.LIST
-        self.ports = ports
+    @classmethod
+    def fromPortList(cls, ipv4: str, threads: int, ports: list[int]):
+        return cls(ipv4, threads, ports, PortType.LIST)
 
-    def fromPortRange(self, port_min: int, port_max: int) -> None:
-        self.port_type = PortType.MIN_MAX
-        self.ports = [port_min, port_max]
+    @classmethod
+    def fromPortRange(cls, ipv4: str, threads: int, port_min: int, port_max: int):
+        return cls(ipv4, threads, [port_min, port_max], PortType.RANGE)
 
 
 class Parser:
@@ -67,10 +77,10 @@ class Parser:
             type=int,
             action="store",
             help=colored(
-                "🤖 amount of simultaneous connections on the target. Default: 5 (0 < threads < 500)",
+                "🤖 maximum amount of simultaneous connections on the target. Default: 100 (0 < threads < 5000)",
                 "grey",
             ),
-            default="5",
+            default="100",
         )
 
     def validate(self) -> CommandInfo:
@@ -93,6 +103,8 @@ class Parser:
                     exit()
             elif "-" in self.args.port:
                 ports_str = self.args.port.split("-")
+                if ports_str[0] == "" and ports_str[1] == "":
+                    ports_str = []
                 try:
                     match len(ports_str):
                         case 0:
@@ -132,17 +144,21 @@ class Parser:
                     cprint("❌ Invalid port", "red", "on_yellow")
                     exit()
         if self.args.thread is not None:
-            if self.args.thread <= 0 or self.args.thread >= 500:
+            if self.args.thread <= 0 or self.args.thread >= 5000:
                 cprint(
-                    f"❌ Invalid number of threads (0 < {self.args.thread} < 500) ",
+                    f"❌ Invalid number of threads (0 < {self.args.thread} < 5000) ",
                     "red",
                     "on_yellow",
                 )
                 exit()
-        cprint("✅ Valid arguments", "green", "on_cyan")
-        command_info = CommandInfo(ipv4=self.args.ipv4, threads=self.args.thread)
-        if ports != []:
-            command_info.fromPortList(ports=ports)
+        if ports != [] or port_min == port_max:
+            return CommandInfo.fromPortList(
+                ipv4=self.args.ipv4, threads=self.args.thread, ports=ports
+            )
         else:
-            command_info.fromPortRange(port_min=port_min, port_max=port_max)
-        return command_info
+            return CommandInfo.fromPortRange(
+                ipv4=self.args.ipv4,
+                threads=self.args.thread,
+                port_min=port_min,
+                port_max=port_max,
+            )
